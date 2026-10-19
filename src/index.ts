@@ -20,3 +20,14 @@ export type {
     MonitorProblemCode,
     RecordingMonitor,
 } from './monitors';
+export {
+    AUDIO_MIME_TYPES,
+    VIDEO_MIME_TYPES,
+    acquireStream,
+    extensionForMimeType,
+    isRecordingSupported,
+    pickMimeType,
+    releaseStream,
+    streamHasVideo,
+} from './sources';
+export type { AcquiredStream, RecordingSource, StreamRequest } from './sources';
