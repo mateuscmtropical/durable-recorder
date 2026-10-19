@@ -1,4 +1,6 @@
 export { createInterruptionMonitor } from './interruptionMonitor';
-export { createWakeLockMonitor } from './wakeLockMonitor';
 export type { InterruptionMonitorOptions } from './interruptionMonitor';
+export { createSilenceMonitor } from './silenceMonitor';
+export type { SilenceMonitorOptions } from './silenceMonitor';
+export { createWakeLockMonitor } from './wakeLockMonitor';
 export type { MonitorContext, MonitorFactory, MonitorProblemCode, RecordingMonitor } from './RecordingMonitor';

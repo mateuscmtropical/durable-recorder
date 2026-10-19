@@ -12,13 +12,14 @@ export type {
     StoredChunk,
     StoredRecording,
 } from './storage';
-export { createInterruptionMonitor, createWakeLockMonitor } from './monitors';
+export { createInterruptionMonitor, createSilenceMonitor, createWakeLockMonitor } from './monitors';
 export type {
     InterruptionMonitorOptions,
     MonitorContext,
     MonitorFactory,
     MonitorProblemCode,
     RecordingMonitor,
+    SilenceMonitorOptions,
 } from './monitors';
 export {
     AUDIO_MIME_TYPES,
