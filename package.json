@@ -39,6 +39,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./container": {
+      "import": {
+        "types": "./dist/container.d.ts",
+        "default": "./dist/container.js"
+      },
+      "require": {
+        "types": "./dist/container.d.cts",
+        "default": "./dist/container.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -62,12 +72,21 @@
     "test:watch": "vitest",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
+  "peerDependencies": {
+    "mediabunny": "^1.61.0"
+  },
+  "peerDependenciesMeta": {
+    "mediabunny": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "happy-dom": "^21.0.3",
+    "mediabunny": "^1.61.6",
     "tsup": "^9.0.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.0",
