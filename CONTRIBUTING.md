@@ -35,6 +35,9 @@ You need Node 20 or newer and pnpm 10.
 pnpm install
 ```
 
+Then run `pnpm demo` and open the local address it prints. The demo runs the
+recorder in a browser, so you can see the library work before you change it.
+
 ## Commands
 
 | Command | What it does |

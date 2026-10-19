@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>durable-recorder demo</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            line-height: 1.4;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 16px;
+            background: Canvas;
+            color: CanvasText;
+        }
+
+        section {
+            border-top: 1px solid #8888;
+            padding: 12px 0;
+        }
+
+        h2 {
+            margin: 0 0 8px;
+            font-size: 1.2rem;
+        }
+
+        h3 {
+            margin: 16px 0 4px;
+            font-size: 1rem;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: flex-end;
+            margin: 8px 0;
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 12rem;
+            padding: 6px;
+            font: inherit;
+        }
+
+        button {
+            padding: 8px 12px;
+            font: inherit;
+        }
+
+        dl {
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            gap: 4px 16px;
+            margin: 0;
+        }
+
+        dd {
+            margin: 0;
+        }
+
+        ul,
+        ol {
+            padding-left: 1.25rem;
+        }
+
+        video,
+        audio {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .hint {
+            opacity: 0.75;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>durable-recorder demo</h1>
+        <p>
+            Record audio, video or the screen. Each slice goes to IndexedDB as it
+            arrives, so a reload in the middle of a recording keeps what was
+            captured. Browsers allow microphone, camera and screen access only on
+            secure pages. localhost counts as secure.
+        </p>
+
+        <section>
+            <h2>Record</h2>
+            <div class="row">
+                <button id="start-audio" type="button">Record audio</button>
+                <button id="start-video" type="button">Record video</button>
+                <button id="start-screen" type="button">Record screen</button>
+                <button id="start-synthetic" type="button">Record synthetic stream</button>
+            </div>
+            <p id="screen-hint" class="hint" hidden>Screen recording is not supported in this browser.</p>
+            <p class="hint">
+                The synthetic stream draws a canvas and plays an oscillator. It
+                needs no permission.
+            </p>
+            <div class="row">
+                <label>
+                    Max duration (ms)
+                    <input id="max-duration" type="number" min="1" placeholder="no limit">
+                </label>
+                <label>
+                    Max size (bytes)
+                    <input id="max-bytes" type="number" min="1" placeholder="no limit">
+                </label>
+            </div>
+            <p class="hint">Limits apply to the next recording. Leave them empty for no limit.</p>
+            <div class="row">
+                <button id="stop" type="button" disabled>Stop</button>
+                <button id="cancel" type="button" disabled>Cancel</button>
+            </div>
+            <p class="hint">Stop keeps the recording. Cancel deletes it.</p>
+        </section>
+
+        <section>
+            <h2>Status</h2>
+            <dl>
+                <dt>State</dt>
+                <dd id="state">idle</dd>
+                <dt>Recording id</dt>
+                <dd id="recording-id">none</dd>
+                <dt>Progress</dt>
+                <dd id="progress">0.0 s, 0.0 KB</dd>
+                <dt>Silence</dt>
+                <dd id="silence">No silence</dd>
+            </dl>
+            <h3>Problems</h3>
+            <ul id="problems"></ul>
+            <h3>Events</h3>
+            <ol id="event-log"></ol>
+        </section>
+
+        <section>
+            <h2>Result</h2>
+            <p id="result-empty" class="hint">Nothing recorded yet.</p>
+            <video id="video-player" controls playsinline hidden></video>
+            <audio id="audio-player" controls hidden></audio>
+            <p><a id="download" hidden>Download recording</a></p>
+        </section>
+
+        <section>
+            <h2>Stored recordings</h2>
+            <p class="hint">
+                Recordings stay here until you delete them. To check recovery, start
+                a recording, reload the page before you stop it, then play the part
+                that was saved.
+            </p>
+            <ul id="stored-list"></ul>
+            <p id="stored-empty" class="hint" hidden>No stored recordings.</p>
+        </section>
+    </main>
+    <script type="module" src="dist/main.js"></script>
+</body>
+</html>
