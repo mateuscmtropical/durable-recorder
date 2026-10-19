@@ -2,9 +2,9 @@
 
 Browser audio, video and screen recording that survives a locked phone, a killed tab or a dropped microphone.
 
-It is built for phones and desktops. The design writes every slice of a recording to IndexedDB as it arrives, so the part recorded so far stays on the device. The building blocks for that exist today. The recorder that connects them is not in yet.
+It is built for phones and desktops. `DurableRecorder` writes every slice of a recording to IndexedDB as it arrives, so the part recorded so far stays on the device. The parts it uses are exported too, for apps that need more control.
 
-> **Status: in development, not on npm yet.** The main `DurableRecorder` class is not merged. A high-level API is coming. This version ships the parts that API will use. You can wire them together today. See [Using the building blocks today](#using-the-building-blocks-today).
+> **Status: in development, not on npm yet.** Build it from the repository, as described in [Install](#install).
 
 ## Why
 
@@ -35,7 +35,7 @@ The library reports a problem. The app decides what to do about it.
 - **Playable WebM.** `finalizeRecording` copies a WebM recording into a new file, which writes its duration. If the copy fails, it returns the input. `readDuration` reads the duration of a recording. `revealMediaDuration` seeks a media element to the end, so it finds the duration of a WebM file, then rewinds it to 0.
 - **Monitors.** `createInterruptionMonitor`, `createSilenceMonitor` and `createWakeLockMonitor` watch a recording while it runs.
 - **Typed problems.** Ten problem codes describe what went wrong. See [Problem codes](#problem-codes).
-- **Not in this version.** Size and duration limits come with the recorder class.
+- **Limits.** `maxBytes` and `maxDurationMs` end the recording when reached. Set `onLimit` to `'event'` to get only the event. See [Options](#options).
 
 ## Phones and desktops
 
@@ -48,9 +48,9 @@ The library checks for each browser API it uses. It reports what is missing inst
 - The first `saveMeta` call on each `RecordingStore` asks the browser for persistent storage. `requestPersistentStorage` does the same request and returns the answer. The browser can refuse.
 - Some browsers throw from `MediaRecorder.isTypeSupported` instead of returning `false`. `pickMimeType` handles that case.
 - `classifyStartError` also recognizes plain objects named `DevicesNotFoundError` and `TrackStartError`, which older Chrome versions throw.
-- Slices are stored as `ArrayBuffer`, not `Blob`. Every `Blob` the library returns is built in memory, so it can be uploaded on Safari 26.5 and 26.6 without a copy (https://bugs.webkit.org/show_bug.cgi?id=319985).
+- Slices are stored as `ArrayBuffer`, not `Blob`. `load` and `DurableRecorder` return in-memory `Blob` objects, not disk-backed `File` objects. Safari 26.5 and 26.6 have a bug with disk-backed files. See [Browser support](docs/BROWSER_SUPPORT.md).
 
-A list of tested browsers is planned in `docs/BROWSER_SUPPORT.md`. The file is not in the repository yet.
+Tested browsers and known WebKit bugs are listed in [Browser support](docs/BROWSER_SUPPORT.md).
 
 ## How persistence works
 
@@ -98,9 +98,133 @@ pnpm add mediabunny
 
 From the repository, run `pnpm demo` and open the local address it prints in a browser. The demo records audio, video, the screen or a synthetic stream. It shows the state, progress, problems and limit events, plays the result and lists the recordings kept in IndexedDB. Reload the page during a recording to check that the saved part is still listed.
 
-## Using the building blocks today
+## Quick start
 
-There is no recorder class yet. You connect `MediaRecorder` to the parts below yourself. The examples use the exported names and signatures.
+`DurableRecorder` records one take at a time. Each slice goes to the store as it arrives. The stored copy stays on the device until your app deletes it.
+
+### Record and stop
+
+```ts
+import { DurableRecorder, RecordingStore } from 'durable-recorder';
+
+const store = new RecordingStore();
+const recorder = new DurableRecorder({ source: 'audio', store });
+
+await recorder.start();
+
+// When the user stops:
+const finished = await recorder.stop();
+```
+
+`start()` resolves when recording begins. It rejects with a `RecorderError` when the recording cannot start. Its `code` says why. Check `DurableRecorder.isSupported('screen')` before you offer screen recording.
+
+`stop()` resolves with a `FinishedRecording`, or with `null` when there is nothing to keep. A `FinishedRecording` has `id`, `blob`, `mimeType`, `extension`, `durationMs`, `sizeBytes`, `metadata` and `segments`.
+
+`cancel()` stops the take and drops it. For a new recording, the stored copy is deleted. For a continued one, only the new take is dropped.
+
+### Events
+
+```ts
+import { DurableRecorder } from 'durable-recorder';
+
+const recorder = new DurableRecorder({ source: 'audio' });
+
+recorder.on('progress', (progress) => {
+    console.log(progress.durationMs, progress.sizeBytes);
+});
+
+recorder.on('problem', ({ code, error }) => {
+    console.warn(code, error.message);
+});
+```
+
+`on` returns a function that removes the listener. `once` runs a listener one time. `off` removes it. Read `recorder.state`, `recorder.recordingId` and `recorder.progress` at any time.
+
+| Event | Payload | Sent when |
+|---|---|---|
+| `state` | `{ state }` | The state changes to `starting`, `recording`, `stopping` or `idle` |
+| `progress` | `RecorderProgress` | About every 250 ms, and after each slice |
+| `problem` | `{ code, error }` | A problem happens. Sent once per recording, for the first problem |
+| `silence` | `{ secondsLeft }` | The input is silent. `0` means the sound came back |
+| `limit-near` | `{ kind, ratio }` | A limit passes `warnAt`. `kind` is `'bytes'` or `'duration'` |
+| `limit` | `{ kind }` | A limit is reached |
+| `storage-error` | `{ error }` | A store write failed. The recording goes on in memory, with no more store writes |
+| `finish` | `FinishedRecording` | The file is ready |
+
+### Upload, then delete
+
+```ts
+import type { FinishedRecording, RecordingStore } from 'durable-recorder';
+
+async function uploadThenDelete(
+    finished: FinishedRecording,
+    store: RecordingStore,
+    upload: (blob: Blob) => Promise<void>,
+): Promise<void> {
+    await upload(finished.blob);
+    await store.delete(finished.id);
+}
+```
+
+`stop()` keeps the stored copy. Delete it only after the upload succeeds. If the upload fails, the recording stays on the device, and `listRecoverable` finds it later.
+
+### Recover and continue
+
+```ts
+import { DurableRecorder, RecordingStore } from 'durable-recorder';
+import { mergeSegments } from 'durable-recorder/container';
+
+const store = new RecordingStore();
+const recorder = new DurableRecorder({
+    source: 'audio',
+    store,
+    mergeSegments,
+});
+
+const recoverable = await recorder.listRecoverable();
+const firstStored = recoverable[0];
+
+if (firstStored) {
+    await recorder.continueRecording(firstStored.id);
+}
+
+// Later, when the user stops:
+const finished = await recorder.stop();
+```
+
+- `listRecoverable()` returns the stored recordings, except the one being recorded. The first store call of a recorder also prunes expired recordings.
+- `continueRecording(id)` starts a take with the next segment number. It needs `store` and `mergeSegments`. The recorder must use the same `source` as the stored recording, or it rejects with `UNSUPPORTED`. An unknown id rejects with `EMPTY`.
+- `stop()` joins all segments into one file. If the join fails, `stop()` sends `NOT_JOINED` and resolves with only the new take. All stored segments stay on the device.
+- `durable-recorder/container` needs `mediabunny`. See [Install](#install).
+
+### Options
+
+Every option is optional.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `source` | `'audio'` | `'audio'`, `'video'`, `'screen'`, or a `MediaStream` from your app. A stream from your app is stored as `'stream'` |
+| `audio` | `true` | Passed to `acquireStream`. `false` leaves the audio track out |
+| `video` | `true` for `'video'` and `'screen'`, `false` for `'audio'` | Passed to `acquireStream`. `false` leaves the video track out |
+| `mimeType` | picked by `pickMimeType` | Preferred format. Used when the browser supports it |
+| `timeslice` | `500` | Milliseconds between slices |
+| `audioBitsPerSecond` | browser default | Passed to `MediaRecorder` |
+| `videoBitsPerSecond` | browser default | Passed to `MediaRecorder` |
+| `maxBytes` | no limit | Size limit in bytes |
+| `maxDurationMs` | no limit | Duration limit in milliseconds |
+| `onLimit` | `'stop'` | `'stop'` ends the recording at a limit. `'event'` only sends the `limit` event |
+| `warnAt` | `0.9` | Fraction of a limit at which `limit-near` is sent |
+| `metadata` | `{}` | Stored with the recording and returned in `FinishedRecording.metadata` |
+| `store` | `new RecordingStore()` | Where slices are kept. `null` keeps them in memory only. Then `listRecoverable` returns `[]`, and `continueRecording` rejects with `UNSUPPORTED` |
+| `retentionDays` | `30` | Days a recording may stay unchanged before it is pruned. Ignored when `store` is set. Set it on the `RecordingStore` instead |
+| `minRecordingBytes` | `1024` | A take smaller than this sends `EMPTY` |
+| `mergeSegments` | none | Needed by `continueRecording`. Same signature as `mergeSegments` from `durable-recorder/container` |
+| `finalize` | none | Runs on the final file, for example `finalizeRecording` from `durable-recorder/container`. If it fails, the original file is kept |
+| `monitors` | `createDefaultMonitors(source)` | Monitor factories. By default: interruption and wake lock, plus silence for audio |
+
+## The building blocks
+
+`DurableRecorder` uses these parts. Use them directly if you need to wire `MediaRecorder` yourself. The examples use the exported names and signatures.
 
 ### Acquire a stream and pick a format
 
@@ -282,7 +406,7 @@ function stopMonitors(monitors: RecordingMonitor[]): void {
 }
 ```
 
-Call `noteSlice` for every slice, `pause` and `resume` on the monitors when you pause and resume, and `stopMonitors` when the recording ends. `reportProblem` can be called more than once. Act on the first call only.
+Call `noteSlice` for every slice and `stopMonitors` when the recording ends. `reportProblem` can be called more than once. Act on the first call only.
 
 ### Join segments and finish the file
 
@@ -407,8 +531,8 @@ This example has no error handling for the store or the monitors. Add it before 
 | `NO_DATA` | No recorded data arrived for too long. | `createInterruptionMonitor` |
 | `SILENCE` | The input stayed silent for too long. | `createSilenceMonitor` |
 | `INTERRUPTED` | The recording was interrupted. | `createInterruptionMonitor`, `classifyStartError` |
-| `EMPTY` | The recording ended without enough data to play. | Not emitted yet |
-| `NOT_JOINED` | The recording segments could not be joined into one file. | Not emitted yet. `mergeSegments` returns `null`. |
+| `EMPTY` | The recording ended without enough data to play. | `DurableRecorder` when a take is smaller than `minRecordingBytes`. `continueRecording` rejects with it for an unknown id. |
+| `NOT_JOINED` | The recording segments could not be joined into one file. | `DurableRecorder` when a continued recording cannot be joined. `mergeSegments` returns `null` or throws. |
 | `STORAGE_FULL` | The device has no room left to store the recording. | `classifyStartError` |
 
 `classifyStartError` maps any error to one of these codes. Errors it does not know become `INTERRUPTED`.
@@ -420,5 +544,6 @@ This example has no error handling for the store or the monitors. Add it before 
 - [Security policy](SECURITY.md). Report security problems here, not in public issues.
 - [Support](SUPPORT.md). Where to ask questions and report bugs.
 - [Architecture](docs/ARCHITECTURE.md) and [coding standards](docs/CODING_STANDARDS.md).
+- [Browser support](docs/BROWSER_SUPPORT.md). Tested browsers and known WebKit bugs.
 - [Changelog](CHANGELOG.md).
 - [MIT license](LICENSE).
