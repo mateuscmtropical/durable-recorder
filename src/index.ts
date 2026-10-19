@@ -1,2 +1,6 @@
-// Public entry point. Each module adds its exports here as it lands.
-export {};
+export { TypedEventEmitter } from './shared/TypedEventEmitter';
+export type { EventListener } from './shared/TypedEventEmitter';
+export { createRecordingId } from './shared/createRecordingId';
+export { RecorderError, RECORDER_PROBLEM_CODES, isRecorderError } from './errors/RecorderError';
+export type { RecorderProblemCode } from './errors/RecorderError';
+export { classifyStartError } from './errors/classifyStartError';
