@@ -34,10 +34,12 @@ function createUuidFromRandomValues(): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function createRecordingId(): string {
+function createRecordingId(): string {
     if (typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
 
     return createUuidFromRandomValues();
 }
+
+export { createRecordingId };

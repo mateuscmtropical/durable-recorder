@@ -33,6 +33,28 @@ and single letters (lint allows `_` for unused parameters only).
 - Files that export a class or interface use its name (`RecordingStore.ts`).
   Other files use the main function name (`pickMimeType.ts`).
 
+## Exports
+
+Never export a declaration in place. Declare classes, functions, constants,
+types and interfaces first, then export them in one list at the end of the
+file (lint).
+
+```ts
+class RecordingStore {
+    // ...
+}
+
+function estimateAvailableBytes(): Promise<number | null> {
+    // ...
+}
+
+export { RecordingStore, estimateAvailableBytes };
+export type { RecordingStoreOptions };
+```
+
+Re-exports such as `export { mergeSegments } from './mergeSegments';` are
+fine in `index.ts` files.
+
 ## Method chains
 
 When more than one method is chained, put each call on its own line (lint).

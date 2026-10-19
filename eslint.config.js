@@ -43,6 +43,19 @@ const NESTED_CALL_RESTRICTIONS = [
     },
 ];
 
+// Declarations are never exported in place. Each file ends with one
+// `export { ... };` (and `export type { ... };`) list.
+const EXPORT_RESTRICTIONS = [
+    {
+        selector: 'ExportNamedDeclaration[declaration!=null]',
+        message: 'Declare without export and add the name to the export list at the end of the file.',
+    },
+    {
+        selector: 'ExportNamedDeclaration[source=null] ~ :not(ExportNamedDeclaration)',
+        message: 'Export lists go at the end of the file.',
+    },
+];
+
 const STYLISTIC_CONFIG = stylistic.configs.customize({
     indent: 4,
     quotes: 'single',
@@ -92,13 +105,13 @@ export default defineConfig(
             ],
             '@typescript-eslint/consistent-type-imports': 'error',
             '@typescript-eslint/explicit-function-return-type': ['error', { allowExpressions: true }],
-            'no-restricted-syntax': ['error', ...LOOP_RESTRICTIONS, ...NESTED_CALL_RESTRICTIONS],
+            'no-restricted-syntax': ['error', ...LOOP_RESTRICTIONS, ...NESTED_CALL_RESTRICTIONS, ...EXPORT_RESTRICTIONS],
         },
     },
     {
         files: ['**/*.test.ts', '**/*.test.tsx', 'test/**'],
         rules: {
-            'no-restricted-syntax': ['error', ...LOOP_RESTRICTIONS],
+            'no-restricted-syntax': ['error', ...LOOP_RESTRICTIONS, ...EXPORT_RESTRICTIONS],
             '@typescript-eslint/no-non-null-assertion': 'off',
         },
     },

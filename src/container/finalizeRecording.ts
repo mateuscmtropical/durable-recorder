@@ -4,7 +4,7 @@ const WEBM_TYPES = ['audio/webm', 'video/webm'];
 
 // Chrome's WebM has no duration header, so players show no total time. Copying
 // the packets into a new WebM writes the duration.
-export async function finalizeRecording(recording: Blob, mimeType: string): Promise<Blob> {
+async function finalizeRecording(recording: Blob, mimeType: string): Promise<Blob> {
     const type = baseMimeType(mimeType);
 
     if (!WEBM_TYPES.includes(type)) {
@@ -15,3 +15,5 @@ export async function finalizeRecording(recording: Blob, mimeType: string): Prom
 
     return remuxed ?? recording;
 }
+
+export { finalizeRecording };

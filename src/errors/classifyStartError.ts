@@ -25,7 +25,7 @@ function readErrorName(error: unknown): string {
     return typeof error.name === 'string' ? error.name : '';
 }
 
-export function classifyStartError(error: unknown): RecorderProblemCode {
+function classifyStartError(error: unknown): RecorderProblemCode {
     if (isRecorderError(error)) {
         return error.code;
     }
@@ -35,3 +35,5 @@ export function classifyStartError(error: unknown): RecorderProblemCode {
 
     return problemCode ?? 'INTERRUPTED';
 }
+
+export { classifyStartError };

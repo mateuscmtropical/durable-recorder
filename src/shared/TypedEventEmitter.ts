@@ -1,11 +1,11 @@
-export type EventListener<Payload> = (payload: Payload) => void;
+type EventListener<Payload> = (payload: Payload) => void;
 
 interface Registration<EventMap extends object> {
     listener: EventListener<EventMap[keyof EventMap]>;
     isOnce: boolean;
 }
 
-export class TypedEventEmitter<EventMap extends object> {
+class TypedEventEmitter<EventMap extends object> {
     private readonly registrationsByEvent = new Map<keyof EventMap, Registration<EventMap>[]>();
 
     on<EventName extends keyof EventMap>(eventName: EventName, listener: EventListener<EventMap[EventName]>): () => void {
@@ -87,3 +87,6 @@ export class TypedEventEmitter<EventMap extends object> {
         }
     }
 }
+
+export { TypedEventEmitter };
+export type { EventListener };

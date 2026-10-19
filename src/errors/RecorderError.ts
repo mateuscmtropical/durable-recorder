@@ -1,6 +1,6 @@
-export type RecorderProblemCode = 'DENIED' | 'NO_DEVICE' | 'DEVICE_BUSY' | 'UNSUPPORTED' | 'NO_DATA' | 'SILENCE' | 'INTERRUPTED' | 'EMPTY' | 'NOT_JOINED' | 'STORAGE_FULL';
+type RecorderProblemCode = 'DENIED' | 'NO_DEVICE' | 'DEVICE_BUSY' | 'UNSUPPORTED' | 'NO_DATA' | 'SILENCE' | 'INTERRUPTED' | 'EMPTY' | 'NOT_JOINED' | 'STORAGE_FULL';
 
-export const RECORDER_PROBLEM_CODES: readonly RecorderProblemCode[] = [
+const RECORDER_PROBLEM_CODES: readonly RecorderProblemCode[] = [
     'DENIED',
     'NO_DEVICE',
     'DEVICE_BUSY',
@@ -26,7 +26,7 @@ const DEFAULT_MESSAGES: Readonly<Record<RecorderProblemCode, string>> = {
     STORAGE_FULL: 'The device has no room left to store the recording.',
 };
 
-export class RecorderError extends Error {
+class RecorderError extends Error {
     readonly code: RecorderProblemCode;
 
     constructor(code: RecorderProblemCode, message?: string, options?: { cause?: unknown }) {
@@ -36,6 +36,9 @@ export class RecorderError extends Error {
     }
 }
 
-export function isRecorderError(value: unknown): value is RecorderError {
+function isRecorderError(value: unknown): value is RecorderError {
     return value instanceof RecorderError;
 }
+
+export { RECORDER_PROBLEM_CODES, RecorderError, isRecorderError };
+export type { RecorderProblemCode };
