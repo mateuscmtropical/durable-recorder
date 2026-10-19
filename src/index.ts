@@ -12,7 +12,7 @@ export type {
     StoredChunk,
     StoredRecording,
 } from './storage';
-export { createInterruptionMonitor } from './monitors';
+export { createInterruptionMonitor, createWakeLockMonitor } from './monitors';
 export type {
     InterruptionMonitorOptions,
     MonitorContext,
