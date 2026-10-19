@@ -32,3 +32,13 @@ export {
     streamHasVideo,
 } from './sources';
 export type { AcquiredStream, RecordingSource, StreamRequest } from './sources';
+export { DurableRecorder, createDefaultMonitors } from './recorder';
+export type {
+    DurableRecorderEvents,
+    DurableRecorderOptions,
+    FinishedRecording,
+    LimitAction,
+    LimitKind,
+    RecorderProgress,
+    RecorderState,
+} from './recorder';
