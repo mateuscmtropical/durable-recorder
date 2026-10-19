@@ -8,7 +8,7 @@ const stopPendingReveals = new WeakMap<HTMLMediaElement, () => void>();
 // WebM from MediaRecorder has no duration header, so the element reports NaN
 // until it scans the file. Seeking far past the end makes it scan, then the
 // position goes back to 0.
-export function revealMediaDuration(media: HTMLMediaElement): () => void {
+function revealMediaDuration(media: HTMLMediaElement): () => void {
     stopPendingReveals.get(media)?.();
 
     if (Number.isFinite(media.duration)) {
@@ -42,3 +42,5 @@ export function revealMediaDuration(media: HTMLMediaElement): () => void {
 
     return stopReveal;
 }
+
+export { revealMediaDuration };

@@ -46,13 +46,13 @@ const OUTPUT_FORMAT_FACTORIES = new Map<string, () => OutputFormat>([
     ['audio/ogg', () => new OggOutputFormat()],
 ]);
 
-export function baseMimeType(mimeType: string): string {
+function baseMimeType(mimeType: string): string {
     const withoutParameters = mimeType.replace(/;.*$/, '');
 
     return withoutParameters.trim();
 }
 
-export async function mergeSegments(segments: Blob[], mimeType: string): Promise<Blob | null> {
+async function mergeSegments(segments: Blob[], mimeType: string): Promise<Blob | null> {
     const [firstSegment] = segments;
     const type = baseMimeType(mimeType);
 
@@ -69,7 +69,7 @@ export async function mergeSegments(segments: Blob[], mimeType: string): Promise
 
 // Copies the packets of every segment into one new file. Also used alone by
 // finalizeRecording to remux a single WebM. Never throws.
-export async function copySegments(segments: Blob[], mimeType: string): Promise<Blob | null> {
+async function copySegments(segments: Blob[], mimeType: string): Promise<Blob | null> {
     const type = baseMimeType(mimeType);
     const createFormat = OUTPUT_FORMAT_FACTORIES.get(type);
 
@@ -284,3 +284,5 @@ async function copyPackets(copy: TrackCopy, offset: number): Promise<number> {
 
     return endTimestamp;
 }
+
+export { baseMimeType, mergeSegments, copySegments };

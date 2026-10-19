@@ -4,7 +4,7 @@ import {
     Input,
 } from 'mediabunny';
 
-export async function readDuration(recording: Blob): Promise<number | null> {
+async function readDuration(recording: Blob): Promise<number | null> {
     const source = new BlobSource(recording);
     const input = new Input({
         formats: ALL_FORMATS,
@@ -21,3 +21,5 @@ export async function readDuration(recording: Blob): Promise<number | null> {
         input.dispose();
     }
 }
+
+export { readDuration };
