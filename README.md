@@ -122,6 +122,8 @@ const finished = await recorder.stop();
 
 `cancel()` stops the take and drops it. For a new recording, the stored copy is deleted. For a continued one, only the new take is dropped.
 
+`pause()` and `resume()` pause and resume the take. Paused time does not count toward `durationMs` or `maxDurationMs`, and the monitors pause too, so a pause never reports `NO_DATA` or `SILENCE`. Both do nothing in the wrong state. `stop()` and `cancel()` also work while paused.
+
 ### Events
 
 ```ts
@@ -142,7 +144,7 @@ recorder.on('problem', ({ code, error }) => {
 
 | Event | Payload | Sent when |
 |---|---|---|
-| `state` | `{ state }` | The state changes to `starting`, `recording`, `stopping` or `idle` |
+| `state` | `{ state }` | The state changes to `starting`, `recording`, `paused`, `stopping` or `idle` |
 | `progress` | `RecorderProgress` | About every 250 ms, and after each slice |
 | `problem` | `{ code, error }` | A problem happens. Sent once per recording, for the first problem |
 | `silence` | `{ secondsLeft }` | The input is silent. `0` means the sound came back |
@@ -212,7 +214,7 @@ Every option is optional.
 | `videoBitsPerSecond` | browser default | Passed to `MediaRecorder` |
 | `maxBytes` | no limit | Size limit in bytes |
 | `maxDurationMs` | no limit | Duration limit in milliseconds |
-| `onLimit` | `'stop'` | `'stop'` ends the recording at a limit. `'event'` only sends the `limit` event |
+| `onLimit` | `'stop'` | `'stop'` ends the recording at a limit. `'event'` only sends the `limit` event. `'pause'` pauses at the limit, so the app can ask the user before it calls `stop()`. `resume()` does nothing while the limit is still reached |
 | `warnAt` | `0.9` | Fraction of a limit at which `limit-near` is sent |
 | `metadata` | `{}` | Stored with the recording and returned in `FinishedRecording.metadata` |
 | `store` | `new RecordingStore()` | Where slices are kept. `null` keeps them in memory only. Then `listRecoverable` returns `[]`, and `continueRecording` rejects with `UNSUPPORTED` |

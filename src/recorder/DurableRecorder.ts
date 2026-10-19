@@ -9,7 +9,7 @@ import { createRecordingId } from '../shared/createRecordingId';
 import { TypedEventEmitter } from '../shared/TypedEventEmitter';
 import { RecordingStore } from '../storage/RecordingStore';
 import type { RecordingMeta, RecordingSourceKind, RecordingStoreOptions, StoredRecording } from '../storage/storageTypes';
-import { createLimitTracker, limitRatio } from './limitTracker';
+import { createLimitTracker, isLimitReached, limitRatio } from './limitTracker';
 import type { LimitTracker, LimitTrackerOptions } from './limitTracker';
 import type {
     DurableRecorderEvents,
@@ -92,6 +92,8 @@ interface RecordingSession {
     previous: StoredRecording | null;
     segment: number;
     baseDurationMs: number;
+    pausedAt: number | null; // set while the take is paused
+    pausedTotalMs: number; // time paused in earlier pauses of this take
 }
 
 // Silence only matters for voice recordings. A quiet video or screen capture is normal.
@@ -297,11 +299,16 @@ function createSession(input: SessionInput): RecordingSession {
         previous: input.previous,
         segment: input.segment,
         baseDurationMs: input.baseDurationMs,
+        pausedAt: null,
+        pausedTotalMs: 0,
     };
 }
 
+// Time of this take without the time it was paused. A paused take counts up to the pause.
 function takeDurationMs(session: RecordingSession): number {
-    return Date.now() - session.startedAt;
+    const activeUntil = session.pausedAt ?? Date.now();
+
+    return activeUntil - session.startedAt - session.pausedTotalMs;
 }
 
 // Stored time of the earlier takes plus the time of this take.
@@ -547,6 +554,36 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
             .then(() => undefined);
     }
 
+    /**
+     * Pauses the recording. Paused time does not count toward the duration or the limits.
+     * Does nothing unless the recorder is recording.
+     */
+    pause(): void {
+        if (this.session) {
+            this.pauseTake(this.session);
+        }
+    }
+
+    /**
+     * Resumes a paused recording. With onLimit 'pause', it does nothing while a limit is reached.
+     * Stop the recording instead.
+     */
+    resume(): void {
+        const session = this.session;
+
+        if (!session || this.currentState !== 'paused') {
+            return;
+        }
+
+        const progress = readProgress(session);
+
+        if (this.settings.onLimit === 'pause' && isLimitReached(this.settings.limits, progress)) {
+            return;
+        }
+
+        this.resumeTake(session);
+    }
+
     private begin(continuedId: string | null): Promise<void> {
         if (this.currentState !== 'idle') {
             return Promise.reject(new Error(ALREADY_RECORDING_MESSAGE));
@@ -779,6 +816,10 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         if (check.reached.length > 0 && this.settings.onLimit === 'stop') {
             void this.requestStop(false);
         }
+
+        if (check.reached.length > 0 && this.settings.onLimit === 'pause') {
+            this.pauseTake(session);
+        }
     }
 
     // A problem is emitted once per recording. Only the first one stops the recording.
@@ -838,6 +879,52 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         }
 
         this.emit('storage-error', { error });
+    }
+
+    // Only a recording can pause. Monitors pause with the recorder, so they do not report silence or no data.
+    private pauseTake(session: RecordingSession): void {
+        if (this.currentState !== 'recording') {
+            return;
+        }
+
+        try {
+            session.mediaRecorder.pause();
+        } catch {
+            // pause() throws once the recorder has stopped. The stop or error that follows ends the take.
+            return;
+        }
+
+        session.pausedAt = Date.now();
+        session.monitors.forEach((monitor) => {
+            monitor.pause();
+        });
+
+        const durationMs = totalDurationMs(session);
+
+        this.enqueueWrite(session, store => saveSnapshot(store, session, durationMs));
+        this.setState('paused');
+    }
+
+    private resumeTake(session: RecordingSession): void {
+        const pausedAt = session.pausedAt;
+
+        if (pausedAt === null) {
+            return;
+        }
+
+        try {
+            session.mediaRecorder.resume();
+        } catch {
+            // resume() throws once the recorder has stopped. The stop or error that follows ends the take.
+            return;
+        }
+
+        session.pausedTotalMs += Date.now() - pausedAt;
+        session.pausedAt = null;
+        session.monitors.forEach((monitor) => {
+            monitor.resume();
+        });
+        this.setState('recording');
     }
 
     private isActive(session: RecordingSession): boolean {

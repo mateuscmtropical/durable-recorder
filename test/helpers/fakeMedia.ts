@@ -26,14 +26,17 @@ interface MediaDevicesStub {
     getDisplayMedia?: Mock<() => Promise<MediaStream>>;
 }
 
-// A MediaStreamTrack that counts how often it was stopped.
-class FakeMediaStreamTrack {
+// A MediaStreamTrack that counts how often it was stopped. It dispatches events
+// such as 'ended' and 'mute', so monitors can listen to it.
+class FakeMediaStreamTrack extends EventTarget {
     readonly kind: TrackKind;
     readyState: 'live' | 'ended' = 'live';
+    muted = false;
     stopCount = 0;
     private readonly stopError: Error | undefined;
 
     constructor(kind: TrackKind, options: FakeTrackOptions = {}) {
+        super();
         this.kind = kind;
         this.stopError = options.stopError;
     }
