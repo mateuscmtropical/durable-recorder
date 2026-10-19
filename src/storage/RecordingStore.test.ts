@@ -278,6 +278,23 @@ describe('RecordingStore', () => {
                 .toBe('video/mp4');
         });
 
+        it('stores chunks as ArrayBuffer and returns Blob segments that are not Files', async () => {
+            const store = createStore();
+
+            await store.saveMeta(recordingMeta('recording-1'));
+            await store.appendChunk(createChunk('recording-1', 0, 0, 1, KIB));
+
+            const rows = await readRows<StoredChunk>('chunks');
+            const recording = await store.load('recording-1');
+
+            expect(rows[0]!.data)
+                .toBeInstanceOf(ArrayBuffer);
+            expect(recording!.segments[0])
+                .toBeInstanceOf(Blob);
+            expect(recording!.segments[0])
+                .not.toBeInstanceOf(File);
+        });
+
         it('returns null when the recording does not exist', async () => {
             await expect(createStore()
                 .load('missing')).resolves.toBeNull();
