@@ -112,8 +112,9 @@ idle ──start()──► starting ──stream ready──► recording ◄�
 2. A `MediaRecorder` starts with a `timeslice` (500 ms by default).
 3. Each `dataavailable` slice is handed to `RecordingStore.appendChunk` through
    a serial queue, so writes, metadata updates and deletes never run out of
-   order. Slices are stored as `ArrayBuffer`, not `Blob`, because storing
-   `Blob` in IndexedDB is unreliable on iOS Safari.
+   order. Slices are stored as `ArrayBuffer`, not `Blob`, so `load` returns
+   in-memory Blobs. Safari 26.5 and 26.6 can upload disk-backed Files with an
+   empty body (WebKit bug 319985: https://bugs.webkit.org/show_bug.cgi?id=319985).
 4. `limitTracker` adds the slice size and elapsed time and decides whether a
    limit is near or reached.
 5. Monitors watch the stream (track ended, muted, no data, silence) and keep

@@ -47,7 +47,7 @@ The library checks for each browser API it uses. It reports what is missing inst
 - The first `saveMeta` call on each `RecordingStore` asks the browser for persistent storage. `requestPersistentStorage` does the same request and returns the answer. The browser can refuse.
 - Some browsers throw from `MediaRecorder.isTypeSupported` instead of returning `false`. `pickMimeType` handles that case.
 - `classifyStartError` also recognizes plain objects named `DevicesNotFoundError` and `TrackStartError`, which older Chrome versions throw.
-- Slices are stored as `ArrayBuffer`, not `Blob`. The project's architecture notes say that storing `Blob` values in IndexedDB is unreliable on iOS Safari.
+- Slices are stored as `ArrayBuffer`, not `Blob`. Every `Blob` the library returns is built in memory, so it can be uploaded on Safari 26.5 and 26.6 without a copy (https://bugs.webkit.org/show_bug.cgi?id=319985).
 
 A list of tested browsers is planned in `docs/BROWSER_SUPPORT.md`. The file is not in the repository yet.
 

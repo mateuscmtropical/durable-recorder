@@ -88,8 +88,8 @@ function writeMeta(database: IDBDatabase, meta: RecordingMeta): Promise<void> {
     return transactionDone(transaction);
 }
 
-// Chunks are stored as ArrayBuffer. Blob values are unreliable in IndexedDB
-// on iOS Safari, see docs/ARCHITECTURE.md.
+// Chunks are stored as ArrayBuffer. Safari 26.5 and 26.6 can upload disk-backed
+// Files with an empty body, see https://bugs.webkit.org/show_bug.cgi?id=319985.
 function writeChunk(database: IDBDatabase, chunk: StoredChunk): Promise<void> {
     const transaction = database.transaction(CHUNKS_STORE, 'readwrite');
 

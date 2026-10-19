@@ -117,8 +117,8 @@ Write comments for the reason behind the code, not for what the code says.
 Browser workarounds always cite the bug or the browser version they target.
 
 ```ts
-// Storing Blob values in IndexedDB is unreliable on iOS Safari (see
-// docs/BROWSER_SUPPORT.md), so slices are stored as ArrayBuffer.
+// Slices are stored as ArrayBuffer, not Blob. Safari 26.5 and 26.6 can upload
+// disk-backed Files with an empty body, https://bugs.webkit.org/show_bug.cgi?id=319985.
 ```
 
 ## Tests
