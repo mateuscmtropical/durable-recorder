@@ -14,8 +14,18 @@ Read two documents first:
 - [Coding standards](docs/CODING_STANDARDS.md) explains the style rules. Lint
   enforces most of them, and the rest are checked in review.
 
-For a large change, open an issue first. That way we can agree on the approach
-before you write the code.
+## Issues first
+
+Every change starts with an issue, even a small one:
+
+1. Open an issue that says what is wrong or what is missing. For a large
+   change, wait until we agree on the approach.
+2. Open a pull request with `Closes #N` in its description, where `N` is the
+   issue number.
+3. Comment on the issue with the pull request link.
+
+A pull request without a linked issue fails the `Linked issue` check and
+cannot be merged. Dependabot pull requests are the only exception.
 
 ## Setup
 
@@ -95,6 +105,7 @@ system, the device and the source (audio, video or screen) you tested with.
 
 Use the pull request template. Before you ask for a review, check that:
 
+- The description links the issue with `Closes #N`.
 - `pnpm check` passes.
 - Tests are added or updated.
 - The docs are updated when the behavior changes.
