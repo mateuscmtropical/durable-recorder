@@ -2,6 +2,9 @@
 
 <!-- What changes, and why. Keep it short. -->
 
+Closes #<!-- issue number. Every pull request needs an issue. -->
+
+
 ## Type of change
 
 - [ ] Bug fix
