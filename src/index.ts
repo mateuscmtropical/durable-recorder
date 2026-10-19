@@ -12,3 +12,11 @@ export type {
     StoredChunk,
     StoredRecording,
 } from './storage';
+export { createInterruptionMonitor } from './monitors';
+export type {
+    InterruptionMonitorOptions,
+    MonitorContext,
+    MonitorFactory,
+    MonitorProblemCode,
+    RecordingMonitor,
+} from './monitors';
