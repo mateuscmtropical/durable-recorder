@@ -1,3 +1,4 @@
+import { RecorderError } from '../errors/RecorderError';
 import { requestPersistentStorage } from './storageQuota';
 import type {
     RecordingMeta,
@@ -14,14 +15,7 @@ const RECORDINGS_STORE = 'recordings';
 const CHUNKS_STORE = 'chunks';
 const RECORDING_INDEX = 'recordingId';
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-
-class StorageUnavailableError extends Error {
-    constructor(cause?: unknown) {
-        super('IndexedDB is unavailable for recordings.', { cause });
-
-        this.name = 'StorageUnavailableError';
-    }
-}
+const UNAVAILABLE_MESSAGE = 'IndexedDB is not available in this browser.';
 
 function resolveFactory(factory?: IDBFactory): IDBFactory | undefined {
     if (factory) {
@@ -323,7 +317,7 @@ class RecordingStore {
             const factory = resolveFactory(this.factory);
 
             if (!factory) {
-                reject(new StorageUnavailableError());
+                reject(new RecorderError('UNSUPPORTED', UNAVAILABLE_MESSAGE));
 
                 return;
             }
@@ -334,7 +328,7 @@ class RecordingStore {
             try {
                 request = factory.open(this.databaseName, DATABASE_VERSION);
             } catch (error) {
-                reject(new StorageUnavailableError(error));
+                reject(new RecorderError('UNSUPPORTED', UNAVAILABLE_MESSAGE, { cause: error }));
 
                 return;
             }
@@ -362,11 +356,11 @@ class RecordingStore {
                 resolve(database);
             };
             request.onerror = () => {
-                reject(new StorageUnavailableError(request.error));
+                reject(new RecorderError('UNSUPPORTED', UNAVAILABLE_MESSAGE, { cause: request.error }));
             };
             request.onblocked = () => {
                 isAbandoned = true;
-                reject(new StorageUnavailableError());
+                reject(new RecorderError('UNSUPPORTED', UNAVAILABLE_MESSAGE));
             };
         });
     }

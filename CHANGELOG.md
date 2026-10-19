@@ -15,7 +15,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `createRecordingId`, which returns a random version 4 UUID.
 - `RecorderError` with a typed `code`, the `RECORDER_PROBLEM_CODES` list, `isRecorderError` and `classifyStartError`.
 - `durable-recorder/container` entry point with `mergeSegments`, `readDuration`, `finalizeRecording` and `revealMediaDuration`. It uses `mediabunny`, an optional peer dependency.
-- `RecordingStore`, which keeps recordings and their slices in IndexedDB, and the `estimateAvailableBytes` and `requestPersistentStorage` storage helpers.
+- `RecordingStore`, which keeps recordings and their slices in IndexedDB, and the `estimateAvailableBytes` and `requestPersistentStorage` storage helpers. The store rejects with a `RecorderError` with the code `UNSUPPORTED` when IndexedDB is not available.
 - Contributing guide, code of conduct, security and support policies, issue forms and a pull request template.
 - `createInterruptionMonitor`, which reports `NO_DATA` when slices stop arriving and `INTERRUPTED` when an input track ends or stays muted.
 - `acquireStream` and `releaseStream` for microphone, camera, screen or an app provided `MediaStream`, plus `isRecordingSupported`, `pickMimeType` and `extensionForMimeType`.

@@ -167,7 +167,7 @@ Failures that stop a recording are surfaced as a `RecorderProblemCode`:
 | `DENIED` | The user or the browser refused the permission |
 | `NO_DEVICE` | No microphone or camera is available |
 | `DEVICE_BUSY` | The device is in use (for example during a phone call) |
-| `UNSUPPORTED` | The browser lacks `MediaRecorder` or the requested source |
+| `UNSUPPORTED` | The browser lacks `MediaRecorder`, the requested source or IndexedDB |
 | `NO_DATA` | No slice arrived for too long |
 | `SILENCE` | The input stayed silent for too long |
 | `INTERRUPTED` | The track ended, stayed muted or the recorder failed |

@@ -2,6 +2,9 @@ import { IDBDatabase as FakeDatabase, IDBFactory, IDBObjectStore, IDBVersionChan
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecordingStore } from './RecordingStore';
 import type { RecordingMeta, RecordingStoreOptions, StoredChunk } from './storageTypes';
+import { classifyStartError } from '../errors/classifyStartError';
+import { isRecorderError } from '../errors/RecorderError';
+import type { RecorderError } from '../errors/RecorderError';
 
 const DEFAULT_DATABASE_NAME = 'durable-recorder';
 const KIB = 1024;
@@ -121,9 +124,21 @@ function forceClose(database: IDBDatabase): void {
     forceCloseDatabase(database as unknown as typeof IDBDatabase);
 }
 
-async function expectStorageUnavailable(operation: Promise<unknown>): Promise<void> {
-    await expect(operation).rejects.toBeInstanceOf(Error);
-    await expect(operation).rejects.toMatchObject({ name: 'StorageUnavailableError' });
+// Resolves with the error the operation rejects with, or undefined if it resolves.
+function captureRejection(operation: Promise<unknown>): Promise<unknown> {
+    return operation.then(() => undefined, (error: unknown) => error);
+}
+
+// Checks that the operation rejects with an UNSUPPORTED RecorderError, and returns it.
+async function expectUnsupported(operation: Promise<unknown>): Promise<RecorderError> {
+    const error = await captureRejection(operation);
+
+    expect(isRecorderError(error))
+        .toBe(true);
+    expect(classifyStartError(error))
+        .toBe('UNSUPPORTED');
+
+    return error as RecorderError;
 }
 
 beforeEach(() => {
@@ -607,36 +622,47 @@ describe('RecordingStore', () => {
     });
 
     describe('unavailable storage', () => {
-        it('rejects every call with StorageUnavailableError when IndexedDB is missing', async () => {
+        it('rejects every call with an UNSUPPORTED RecorderError when IndexedDB is missing', async () => {
             vi.stubGlobal('indexedDB', undefined);
 
             const store = new RecordingStore();
 
-            await expectStorageUnavailable(store.list());
-            await expectStorageUnavailable(store.saveMeta(recordingMeta('recording-1')));
-            await expectStorageUnavailable(store.load('recording-1'));
+            const listError = await expectUnsupported(store.list());
+
+            await expectUnsupported(store.saveMeta(recordingMeta('recording-1')));
+            await expectUnsupported(store.load('recording-1'));
+
+            expect(listError.cause)
+                .toBeUndefined();
         });
 
-        it('rejects with StorageUnavailableError when the database cannot be opened', async () => {
+        it('keeps the VersionError from a failed open as the cause', async () => {
             await createDatabaseAtVersion(DEFAULT_DATABASE_NAME, 2);
 
             const store = createStore();
 
-            await expectStorageUnavailable(store.list());
+            const error = await expectUnsupported(store.list());
+
+            expect(error.cause)
+                .toMatchObject({ name: 'VersionError' });
         });
 
-        it('rejects with StorageUnavailableError when opening throws at once', async () => {
+        it('keeps the error thrown by open as the cause', async () => {
+            const accessDenied = new Error('Access denied');
             const brokenFactory = {
                 open: () => {
-                    throw new Error('Access denied');
+                    throw accessDenied;
                 },
             } as unknown as IDBFactory;
             const store = new RecordingStore({ indexedDB: brokenFactory });
 
-            await expectStorageUnavailable(store.list());
+            const error = await expectUnsupported(store.list());
+
+            expect(error.cause)
+                .toBe(accessDenied);
         });
 
-        it('rejects with StorageUnavailableError when the open is blocked', async () => {
+        it('rejects with an UNSUPPORTED RecorderError and no cause when the open is blocked', async () => {
             const realOpen = factory.open.bind(factory);
 
             vi.spyOn(factory, 'open')
@@ -652,7 +678,10 @@ describe('RecordingStore', () => {
 
             const store = createStore();
 
-            await expectStorageUnavailable(store.list());
+            const error = await expectUnsupported(store.list());
+
+            expect(error.cause)
+                .toBeUndefined();
         });
     });
 
