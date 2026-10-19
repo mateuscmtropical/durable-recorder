@@ -93,6 +93,10 @@ pnpm add mediabunny
 | `durable-recorder` | `RecordingStore`, `acquireStream`, `releaseStream`, `isRecordingSupported`, `streamHasVideo`, `pickMimeType`, `extensionForMimeType`, `AUDIO_MIME_TYPES`, `VIDEO_MIME_TYPES`, `createInterruptionMonitor`, `createSilenceMonitor`, `createWakeLockMonitor`, `classifyStartError`, `RecorderError`, `RECORDER_PROBLEM_CODES`, `isRecorderError`, `estimateAvailableBytes`, `requestPersistentStorage`, `TypedEventEmitter`, `createRecordingId`, and their types | nothing extra |
 | `durable-recorder/container` | `mergeSegments`, `finalizeRecording`, `readDuration`, `revealMediaDuration` | `mediabunny` |
 
+## Try the demo
+
+From the repository, run `pnpm demo` and open the local address it prints in a browser. The demo records audio, video, the screen or a synthetic stream. It shows the state, progress, problems and limit events, plays the result and lists the recordings kept in IndexedDB. Reload the page during a recording to check that the saved part is still listed.
+
 ## Using the building blocks today
 
 There is no recorder class yet. You connect `MediaRecorder` to the parts below yourself. The examples use the exported names and signatures.
