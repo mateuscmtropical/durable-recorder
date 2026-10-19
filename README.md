@@ -398,7 +398,7 @@ This example has no error handling for the store or the monitors. Add it before 
 | `DENIED` | Permission to use the device was denied. | `classifyStartError` |
 | `NO_DEVICE` | No microphone or camera is available. | `acquireStream`, `classifyStartError` |
 | `DEVICE_BUSY` | The device is in use by another app. | `classifyStartError` |
-| `UNSUPPORTED` | This browser cannot record from the requested source. | `acquireStream`, `classifyStartError` |
+| `UNSUPPORTED` | This browser cannot record from the requested source. | `acquireStream`, `classifyStartError`, `RecordingStore` when IndexedDB is missing or cannot be opened |
 | `NO_DATA` | No recorded data arrived for too long. | `createInterruptionMonitor` |
 | `SILENCE` | The input stayed silent for too long. | `createSilenceMonitor` |
 | `INTERRUPTED` | The recording was interrupted. | `createInterruptionMonitor`, `classifyStartError` |
