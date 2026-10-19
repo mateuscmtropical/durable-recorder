@@ -20,3 +20,4 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `createInterruptionMonitor`, which reports `NO_DATA` when slices stop arriving and `INTERRUPTED` when an input track ends or stays muted.
 - `acquireStream` and `releaseStream` for microphone, camera, screen or an app provided `MediaStream`, plus `isRecordingSupported`, `pickMimeType` and `extensionForMimeType`.
 - `createWakeLockMonitor`, which keeps the screen awake during a recording where the Screen Wake Lock API exists, so a phone does not lock and stop the capture.
+- `createSilenceMonitor`, which warns with a countdown when the microphone input stays silent and reports `SILENCE` at the limit (20 seconds by default).
