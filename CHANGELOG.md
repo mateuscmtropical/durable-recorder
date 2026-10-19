@@ -26,3 +26,4 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `retentionDays` option on `DurableRecorder` for its default store. The recorder removes expired recordings the first time it uses its store.
 - `FinishedRecording.segments` and `RecordingMeta.durationMs`. The stored duration is saved with every slice.
 - `DurableRecorder.pause` and `resume`, the `paused` state and `onLimit: 'pause'`. Paused time does not count toward the duration or the limits.
+- `durable-recorder/react` entry point with `useDurableRecorder`, a hook that owns one `DurableRecorder` per component, keeps its actions stable and stops its recording on unmount. `react` (18 or 19) is an optional peer dependency.

@@ -93,6 +93,7 @@ pnpm add mediabunny
 |---|---|---|
 | `durable-recorder` | `RecordingStore`, `acquireStream`, `releaseStream`, `isRecordingSupported`, `streamHasVideo`, `pickMimeType`, `extensionForMimeType`, `AUDIO_MIME_TYPES`, `VIDEO_MIME_TYPES`, `createInterruptionMonitor`, `createSilenceMonitor`, `createWakeLockMonitor`, `classifyStartError`, `RecorderError`, `RECORDER_PROBLEM_CODES`, `isRecorderError`, `estimateAvailableBytes`, `requestPersistentStorage`, `TypedEventEmitter`, `createRecordingId`, and their types | nothing extra |
 | `durable-recorder/container` | `mergeSegments`, `finalizeRecording`, `readDuration`, `revealMediaDuration` | `mediabunny` |
+| `durable-recorder/react` | `useDurableRecorder`, and the `UseDurableRecorderResult` type | `react` 18 or 19 |
 
 ## Try the demo
 
@@ -223,6 +224,30 @@ Every option is optional.
 | `mergeSegments` | none | Needed by `continueRecording`. Same signature as `mergeSegments` from `durable-recorder/container` |
 | `finalize` | none | Runs on the final file, for example `finalizeRecording` from `durable-recorder/container`. If it fails, the original file is kept |
 | `monitors` | `createDefaultMonitors(source)` | Monitor factories. By default: interruption and wake lock, plus silence for audio |
+
+## React
+
+`durable-recorder/react` exports `useDurableRecorder`. It creates one `DurableRecorder` per component on the first render. The hook returns the state, progress, problems and finished recording, plus `start`, `stop`, `cancel`, `pause`, `resume`, `listRecoverable` and `continueRecording`. Each action calls the recorder method with the same name, and keeps its identity across renders, so it can go in an effect's dependency list. `start` and `continueRecording` reject when setup fails, as the class does. The hook also returns `recorder`, the `DurableRecorder` itself, for events the hook does not track, such as `silence`, `limit-near`, `limit` and `storage-error`.
+
+The options are read on the first render only. Later changes are ignored. Give the component a new `key` to start again with other options. Unmounting removes the listeners and stops a recording that is still running. The microphone is released and the stored copy stays, so `listRecoverable` can find it later.
+
+```tsx
+import { useDurableRecorder } from 'durable-recorder/react';
+
+function VoiceNote() {
+    const { state, progress, problems, finished, start, stop } = useDurableRecorder({ source: 'audio' });
+
+    return (
+        <div>
+            <p>State: {state}. Recorded {Math.round(progress.durationMs / 1000)} s.</p>
+            <button disabled={state !== 'idle'} onClick={() => { void start(); }}>Record</button>
+            <button disabled={state !== 'recording'} onClick={() => { void stop(); }}>Stop</button>
+            {problems.map((problem) => <p key={problem.code}>{problem.error.message}</p>)}
+            {finished && <p>Saved {finished.sizeBytes} bytes as .{finished.extension}.</p>}
+        </div>
+    );
+}
+```
 
 ## The building blocks
 
