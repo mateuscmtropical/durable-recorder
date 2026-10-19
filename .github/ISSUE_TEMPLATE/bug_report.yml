@@ -1,0 +1,114 @@
+name: Bug report
+description: Recording fails, stops or saves the wrong data in a browser
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Recording depends on the browser, the operating system and the device, so please fill in every field.
+
+        Do not paste private recordings or personal data into this issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A short summary of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest steps that show the problem.
+      placeholder: |
+        1. Start a voice recording
+        2. Lock the phone for 30 seconds
+        3. Unlock the phone and stop the recording
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you thought would happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Include what the recording contains, if you can tell.
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "e.g. Safari 18, Chrome 131"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: "e.g. iOS 18, Android 15, Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Phone, tablet or computer model.
+      placeholder: "e.g. iPhone 13, Pixel 8, Dell XPS 13"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Recording source
+      description: What the recorder was capturing when the problem happened.
+      options:
+        - audio
+        - video
+        - screen
+        - stream (a MediaStream passed in)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: durable-recorder version
+      description: The version from package.json, or the commit hash if you run from the repository.
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Recording options
+      description: The options you passed to the library. Remove anything private.
+      render: javascript
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Console output or error details. Include the error code if the library reported one.
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues for this problem.
+          required: true

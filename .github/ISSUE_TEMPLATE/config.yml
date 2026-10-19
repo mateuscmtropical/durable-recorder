@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mateuscmtropical/durable-recorder/security/policy
+    about: Report vulnerabilities privately, as described in the security policy. Do not open a public issue for them.
+  - name: Ask a question
+    url: https://github.com/mateuscmtropical/durable-recorder/blob/main/SUPPORT.md
+    about: Read where to ask questions and what to include.
