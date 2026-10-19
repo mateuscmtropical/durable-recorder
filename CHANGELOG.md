@@ -25,3 +25,4 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `DurableRecorder.listRecoverable` and `continueRecording`, which add a new segment to a stored recording and join every segment when it stops. They need the `mergeSegments` option.
 - `retentionDays` option on `DurableRecorder` for its default store. The recorder removes expired recordings the first time it uses its store.
 - `FinishedRecording.segments` and `RecordingMeta.durationMs`. The stored duration is saved with every slice.
+- `DurableRecorder.pause` and `resume`, the `paused` state and `onLimit: 'pause'`. Paused time does not count toward the duration or the limits.

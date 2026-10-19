@@ -92,5 +92,12 @@ function limitRatio(options: LimitTrackerOptions, progress: RecorderProgress, ki
     return measure.value / measure.limit;
 }
 
-export { createLimitTracker, limitRatio };
+// True when a limit is reached now, including one that was reported before.
+function isLimitReached(options: LimitTrackerOptions, progress: RecorderProgress): boolean {
+    const measures = measuresFor(options, progress);
+
+    return measures.some(isReached);
+}
+
+export { createLimitTracker, isLimitReached, limitRatio };
 export type { LimitCheck, LimitTracker, LimitTrackerOptions };

@@ -3,9 +3,9 @@ import type { MonitorFactory } from '../monitors/RecordingMonitor';
 import type { RecordingSource } from '../sources/sourceTypes';
 import type { RecordingStore } from '../storage/RecordingStore';
 
-type RecorderState = 'idle' | 'starting' | 'recording' | 'stopping';
+type RecorderState = 'idle' | 'starting' | 'recording' | 'paused' | 'stopping';
 type LimitKind = 'bytes' | 'duration';
-type LimitAction = 'stop' | 'event';
+type LimitAction = 'stop' | 'event' | 'pause';
 
 interface DurableRecorderOptions {
     source?: RecordingSource; // default 'audio'
@@ -17,7 +17,7 @@ interface DurableRecorderOptions {
     videoBitsPerSecond?: number;
     maxBytes?: number; // no limit when undefined
     maxDurationMs?: number; // no limit when undefined
-    onLimit?: LimitAction; // default 'stop'
+    onLimit?: LimitAction; // 'stop' ends the recording, 'pause' pauses it, 'event' only emits limit. Default 'stop'
     warnAt?: number; // fraction from 0 to 1, default 0.9
     metadata?: Record<string, unknown>; // default {}
     store?: RecordingStore | null; // default new RecordingStore(). null keeps the slices in memory only

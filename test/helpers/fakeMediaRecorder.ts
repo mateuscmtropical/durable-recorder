@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-type FakeRecorderState = 'inactive' | 'recording';
+type FakeRecorderState = 'inactive' | 'recording' | 'paused';
 
 interface FakeMediaRecorderOptions {
     // The types that isTypeSupported answers yes to. Default is none.
@@ -11,6 +11,8 @@ interface FakeMediaRecorderOptions {
     constructorError?: Error;
     // Thrown by start().
     startError?: Error;
+    // Thrown by pause().
+    pauseError?: Error;
 }
 
 interface FakeMediaRecorderControl {
@@ -53,6 +55,8 @@ class FakeMediaRecorder extends EventTarget {
     state: FakeRecorderState = 'inactive';
     timeslice: number | undefined = undefined;
     startCount = 0;
+    pauseCount = 0;
+    resumeCount = 0;
     stopCount = 0;
     ondataavailable: ((event: FakeBlobEvent) => void) | null = null;
     onerror: ((event: FakeRecorderErrorEvent) => void) | null = null;
@@ -79,6 +83,34 @@ class FakeMediaRecorder extends EventTarget {
         this.startCount += 1;
         this.timeslice = timeslice;
         this.state = 'recording';
+    }
+
+    // Like the browser, pausing an inactive recorder throws and pausing a paused one does nothing.
+    pause(): void {
+        if (activeOptions.pauseError) {
+            throw activeOptions.pauseError;
+        }
+
+        if (this.state === 'inactive') {
+            throw new DOMException('The MediaRecorder is inactive.', 'InvalidStateError');
+        }
+
+        if (this.state === 'recording') {
+            this.pauseCount += 1;
+            this.state = 'paused';
+        }
+    }
+
+    // Like the browser, resuming an inactive recorder throws and resuming a recording one does nothing.
+    resume(): void {
+        if (this.state === 'inactive') {
+            throw new DOMException('The MediaRecorder is inactive.', 'InvalidStateError');
+        }
+
+        if (this.state === 'paused') {
+            this.resumeCount += 1;
+            this.state = 'recording';
+        }
     }
 
     // Like the browser, nothing happens when the recorder is already inactive.
