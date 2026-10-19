@@ -8,7 +8,7 @@ import type { AcquiredStream, RecordingSource, StreamRequest } from '../sources/
 import { createRecordingId } from '../shared/createRecordingId';
 import { TypedEventEmitter } from '../shared/TypedEventEmitter';
 import { RecordingStore } from '../storage/RecordingStore';
-import type { RecordingMeta } from '../storage/storageTypes';
+import type { RecordingMeta, RecordingSourceKind, RecordingStoreOptions, StoredRecording } from '../storage/storageTypes';
 import { createLimitTracker, limitRatio } from './limitTracker';
 import type { LimitTracker, LimitTrackerOptions } from './limitTracker';
 import type {
@@ -30,6 +30,11 @@ const DEFAULT_AUDIO_MIME_TYPE = 'audio/webm';
 const DEFAULT_VIDEO_MIME_TYPE = 'video/webm';
 const ALREADY_RECORDING_MESSAGE = 'DurableRecorder is already recording';
 const START_CANCELLED_MESSAGE = 'Recording was cancelled before it started.';
+const RETENTION_RANGE_MESSAGE = 'retentionDays must be a number of days, 0 or more';
+const CONTINUE_NEEDS_MERGE_MESSAGE = 'continueRecording needs the mergeSegments option';
+const CONTINUE_NEEDS_STORE_MESSAGE = 'continueRecording needs a store';
+const MISSING_RECORDING_MESSAGE = 'No stored recording with that id';
+const CONTINUE_SOURCE_MISMATCH_MESSAGE = 'continueRecording needs a recorder with the same source as the stored recording';
 
 type StoreWrite = (store: RecordingStore) => Promise<void>;
 
@@ -47,6 +52,7 @@ interface RecorderSettings {
     minRecordingBytes: number;
     monitors: MonitorFactory[];
     finalize: DurableRecorderOptions['finalize'];
+    mergeSegments: DurableRecorderOptions['mergeSegments'];
 }
 
 interface SessionInput {
@@ -56,6 +62,9 @@ interface SessionInput {
     mimeType: string;
     startedAt: number;
     settings: RecorderSettings;
+    previous: StoredRecording | null;
+    segment: number;
+    baseDurationMs: number;
 }
 
 // One recording from start to finish. Only DurableRecorder changes its fields.
@@ -80,6 +89,9 @@ interface RecordingSession {
     isEnding: boolean;
     isDiscarded: boolean;
     isClosed: boolean;
+    previous: StoredRecording | null;
+    segment: number;
+    baseDurationMs: number;
 }
 
 // Silence only matters for voice recordings. A quiet video or screen capture is normal.
@@ -95,15 +107,50 @@ function createDefaultMonitors(source: RecordingSource): MonitorFactory[] {
     return [...monitors, silenceMonitor];
 }
 
+function assertRetentionDays(retentionDays: number | undefined): void {
+    if (retentionDays === undefined) {
+        return;
+    }
+
+    if (Number.isNaN(retentionDays) || retentionDays < 0) {
+        throw new RangeError(RETENTION_RANGE_MESSAGE);
+    }
+}
+
 function assertRecordingSupported(source: RecordingSource): void {
     if (!isRecordingSupported(source)) {
         throw new RecorderError('UNSUPPORTED');
     }
 }
 
-function resolveStore(store: RecordingStore | null | undefined): RecordingStore | null {
+// A MediaStream from the app is stored as 'stream'. The other sources are stored as their own name.
+function sourceKindOf(source: RecordingSource): RecordingSourceKind {
+    return typeof source === 'string' ? source : 'stream';
+}
+
+// A continued take must use the mime type the recording was stored with.
+function assertMimeTypeSupported(previous: StoredRecording | null): void {
+    if (previous && !MediaRecorder.isTypeSupported(previous.mimeType)) {
+        throw new RecorderError('UNSUPPORTED');
+    }
+}
+
+// retentionDays is left out when not set, because exactOptionalPropertyTypes is on.
+function buildStoreOptions(retentionDays: number | undefined): RecordingStoreOptions {
+    const storeOptions: RecordingStoreOptions = {};
+
+    if (retentionDays !== undefined) {
+        storeOptions.retentionDays = retentionDays;
+    }
+
+    return storeOptions;
+}
+
+function resolveStore(store: RecordingStore | null | undefined, retentionDays: number | undefined): RecordingStore | null {
     if (store === undefined) {
-        return new RecordingStore();
+        const storeOptions = buildStoreOptions(retentionDays);
+
+        return new RecordingStore(storeOptions);
     }
 
     return store;
@@ -141,10 +188,11 @@ function resolveSettings(options: DurableRecorderOptions): RecorderSettings {
         },
         onLimit: options.onLimit ?? 'stop',
         metadata: options.metadata ?? {},
-        store: resolveStore(options.store),
+        store: resolveStore(options.store, options.retentionDays),
         minRecordingBytes: options.minRecordingBytes ?? DEFAULT_MIN_RECORDING_BYTES,
         monitors: options.monitors ?? createDefaultMonitors(source),
         finalize: options.finalize,
+        mergeSegments: options.mergeSegments,
     };
 }
 
@@ -180,15 +228,19 @@ function resolveRecordedType(recorderType: string | undefined, pickedType: strin
     return hasVideo ? DEFAULT_VIDEO_MIME_TYPE : DEFAULT_AUDIO_MIME_TYPE;
 }
 
+// A continued take keeps the stored identity and gets the next segment number.
 function buildMeta(input: SessionInput): RecordingMeta {
+    const previous = input.previous;
+
     return {
         id: input.id,
         mimeType: input.mimeType,
-        source: input.acquired.kind,
-        createdAt: input.startedAt,
+        source: previous ? previous.source : input.acquired.kind,
+        createdAt: previous ? previous.createdAt : input.startedAt,
         updatedAt: input.startedAt,
-        metadata: input.settings.metadata,
-        nextSegment: 1,
+        metadata: previous ? previous.metadata : input.settings.metadata,
+        nextSegment: input.segment + 1,
+        durationMs: input.baseDurationMs,
     };
 }
 
@@ -215,7 +267,13 @@ function waitForStopOrTimeout(stopped: Promise<void>): Promise<void> {
         });
 }
 
+function sumBlobSizes(blobs: Blob[]): number {
+    return blobs.reduce((total, blob) => total + blob.size, 0);
+}
+
 function createSession(input: SessionInput): RecordingSession {
+    const carriedBytes = sumBlobSizes(input.previous ? input.previous.segments : []);
+
     return {
         id: input.id,
         acquired: input.acquired,
@@ -227,7 +285,7 @@ function createSession(input: SessionInput): RecordingSession {
         stopped: waitForStop(input.mediaRecorder),
         limits: createLimitTracker(input.settings.limits),
         slices: [],
-        sizeBytes: 0,
+        sizeBytes: carriedBytes,
         nextPosition: 0,
         writes: Promise.resolve(),
         monitors: [],
@@ -236,12 +294,24 @@ function createSession(input: SessionInput): RecordingSession {
         isEnding: false,
         isDiscarded: false,
         isClosed: false,
+        previous: input.previous,
+        segment: input.segment,
+        baseDurationMs: input.baseDurationMs,
     };
+}
+
+function takeDurationMs(session: RecordingSession): number {
+    return Date.now() - session.startedAt;
+}
+
+// Stored time of the earlier takes plus the time of this take.
+function totalDurationMs(session: RecordingSession): number {
+    return session.baseDurationMs + takeDurationMs(session);
 }
 
 function readProgress(session: RecordingSession): RecorderProgress {
     return {
-        durationMs: Date.now() - session.startedAt,
+        durationMs: totalDurationMs(session),
         sizeBytes: session.sizeBytes,
     };
 }
@@ -282,32 +352,94 @@ function releaseMonitors(monitors: RecordingMonitor[]): void {
     });
 }
 
-async function writeSlice(store: RecordingStore, recordingId: string, position: number, blob: Blob): Promise<void> {
+async function writeSlice(store: RecordingStore, session: RecordingSession, position: number, blob: Blob): Promise<void> {
     const data = await blob.arrayBuffer();
 
-    await store.appendChunk({ recordingId, segment: 0, position, data });
+    await store.appendChunk({ recordingId: session.id, segment: session.segment, position, data });
 }
 
-// Errors from the delete are ignored, because the recording is already over.
-async function removeStored(store: RecordingStore | null, recordingId: string): Promise<void> {
+function buildSnapshot(session: RecordingSession, durationMs: number): RecordingMeta {
+    return {
+        ...session.meta,
+        updatedAt: Date.now(),
+        durationMs,
+    };
+}
+
+async function saveSnapshot(store: RecordingStore, session: RecordingSession, durationMs: number): Promise<void> {
+    const snapshot = buildSnapshot(session, durationMs);
+
+    await store.saveMeta(snapshot);
+}
+
+// Puts the stored meta back after this take is dropped, so the next take reuses its segment number.
+function buildRollbackMeta(session: RecordingSession): RecordingMeta {
+    return {
+        ...session.meta,
+        nextSegment: session.segment,
+        durationMs: session.baseDurationMs,
+        updatedAt: Date.now(),
+    };
+}
+
+// Only this take goes. The stored segments before it stay.
+async function dropTake(store: RecordingStore, session: RecordingSession): Promise<void> {
+    await store
+        .dropSegments(session.id, session.segment)
+        .catch(() => undefined);
+
+    const rollback = buildRollbackMeta(session);
+
+    await store
+        .saveMeta(rollback)
+        .catch(() => undefined);
+}
+
+// A new recording is deleted. A continued one keeps its stored segments.
+// Errors from the store are ignored, because the take is already over.
+async function removeTake(store: RecordingStore | null, session: RecordingSession): Promise<void> {
     if (!store) {
         return;
     }
 
+    if (session.previous) {
+        await dropTake(store, session);
+
+        return;
+    }
+
     await store
-        .delete(recordingId)
+        .delete(session.id)
         .catch(() => undefined);
 }
 
-function buildFinished(session: RecordingSession, blob: Blob): FinishedRecording {
+// A join that throws counts as a failed join.
+async function joinSegments(
+    merge: DurableRecorderOptions['mergeSegments'],
+    segments: Blob[],
+    mimeType: string,
+): Promise<Blob | null> {
+    if (!merge) {
+        return null;
+    }
+
+    try {
+        return await merge(segments, mimeType);
+    } catch {
+        return null;
+    }
+}
+
+function buildFinished(session: RecordingSession, blob: Blob, segments: number, durationMs: number): FinishedRecording {
     return {
         id: session.id,
         blob,
         mimeType: session.mimeType,
         extension: extensionForMimeType(session.mimeType),
-        durationMs: Date.now() - session.startedAt,
+        durationMs,
         sizeBytes: blob.size,
         metadata: session.meta.metadata,
+        segments,
     };
 }
 
@@ -322,10 +454,12 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
     private stopPromise: Promise<FinishedRecording | null> | null = null;
     private attempt: Promise<void> | null = null;
     private isCancelRequested = false;
+    private hasPruned = false;
 
     constructor(options: DurableRecorderOptions = {}) {
         super();
 
+        assertRetentionDays(options.retentionDays);
         this.settings = resolveSettings(options);
     }
 
@@ -356,15 +490,33 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
      * Asks for the source, starts MediaRecorder and resolves once it records.
      */
     start(): Promise<void> {
-        if (this.currentState !== 'idle') {
-            return Promise.reject(new Error(ALREADY_RECORDING_MESSAGE));
+        return this.begin(null);
+    }
+
+    /**
+     * Records a new take into a stored recording. The take gets the next segment number.
+     * Needs the mergeSegments option and a store.
+     */
+    continueRecording(recordingId: string): Promise<void> {
+        return this.begin(recordingId);
+    }
+
+    /**
+     * Stored recordings except the one being written now. Expired ones are pruned first.
+     */
+    async listRecoverable(): Promise<RecordingMeta[]> {
+        const store = this.settings.store;
+
+        if (!store) {
+            return [];
         }
 
-        this.isCancelRequested = false;
-        this.setState('starting');
-        this.attempt = this.runStart();
+        this.prepareStore();
 
-        return this.attempt;
+        const metas = await store.list();
+        const activeId = this.recordingId;
+
+        return metas.filter(meta => meta.id !== activeId);
     }
 
     /**
@@ -382,6 +534,7 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
 
     /**
      * Stops the recording and drops it. The stored copy is deleted and no finish event is sent.
+     * For a continued recording only the new take is dropped.
      */
     cancel(): Promise<void> {
         if (this.currentState === 'starting') {
@@ -394,6 +547,19 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
             .then(() => undefined);
     }
 
+    private begin(continuedId: string | null): Promise<void> {
+        if (this.currentState !== 'idle') {
+            return Promise.reject(new Error(ALREADY_RECORDING_MESSAGE));
+        }
+
+        this.prepareStore();
+        this.isCancelRequested = false;
+        this.setState('starting');
+        this.attempt = this.runStart(continuedId);
+
+        return this.attempt;
+    }
+
     private waitForAttempt(): Promise<void> {
         if (!this.attempt) {
             return Promise.resolve();
@@ -402,18 +568,34 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         return this.attempt.catch(() => undefined);
     }
 
-    private async runStart(): Promise<void> {
+    // Pruning runs once, before the first store operation of this recorder. The store runs
+    // its operations in order, so the prune finishes before any write of the new take.
+    private prepareStore(): void {
+        const store = this.settings.store;
+
+        if (!store || this.hasPruned) {
+            return;
+        }
+
+        this.hasPruned = true;
+
+        const pruning = store.pruneExpired();
+
+        // A failed prune must not block recording.
+        void pruning.catch(() => undefined);
+    }
+
+    private async runStart(continuedId: string | null): Promise<void> {
         let acquired: AcquiredStream | undefined;
 
         try {
+            const previous = await this.loadPrevious(continuedId);
+
             assertRecordingSupported(this.settings.source);
+            assertMimeTypeSupported(previous);
             acquired = await acquireStream(this.settings.request);
-
-            if (this.isCancelRequested) {
-                throw new Error(START_CANCELLED_MESSAGE);
-            }
-
-            this.beginRecording(acquired);
+            this.assertNotCancelled();
+            this.beginRecording(acquired, previous);
         } catch (error: unknown) {
             if (acquired) {
                 releaseStream(acquired);
@@ -425,13 +607,49 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         }
     }
 
-    private beginRecording(acquired: AcquiredStream): void {
+    private assertNotCancelled(): void {
+        if (this.isCancelRequested) {
+            throw new Error(START_CANCELLED_MESSAGE);
+        }
+    }
+
+    private async loadPrevious(continuedId: string | null): Promise<StoredRecording | null> {
+        if (continuedId === null) {
+            return null;
+        }
+
+        if (!this.settings.mergeSegments) {
+            throw new RecorderError('UNSUPPORTED', CONTINUE_NEEDS_MERGE_MESSAGE);
+        }
+
+        const store = this.settings.store;
+
+        if (!store) {
+            throw new RecorderError('UNSUPPORTED', CONTINUE_NEEDS_STORE_MESSAGE);
+        }
+
+        const stored = await store.load(continuedId);
+
+        if (!stored) {
+            throw new RecorderError('EMPTY', MISSING_RECORDING_MESSAGE);
+        }
+
+        if (stored.source !== sourceKindOf(this.settings.source)) {
+            throw new RecorderError('UNSUPPORTED', CONTINUE_SOURCE_MISMATCH_MESSAGE);
+        }
+
+        return stored;
+    }
+
+    private beginRecording(acquired: AcquiredStream, previous: StoredRecording | null): void {
         const hasVideo = streamHasVideo(acquired.stream);
-        const pickedType = pickMimeType(hasVideo, this.settings.mimeType);
+        const pickedType = previous ? previous.mimeType : pickMimeType(hasVideo, this.settings.mimeType);
         const recorderOptions = buildRecorderOptions(this.settings, pickedType);
         const mediaRecorder = new MediaRecorder(acquired.stream, recorderOptions);
-        const mimeType = resolveRecordedType(mediaRecorder.mimeType, pickedType, hasVideo);
-        const id = createRecordingId();
+        const mimeType = previous ? previous.mimeType : resolveRecordedType(mediaRecorder.mimeType, pickedType, hasVideo);
+        const id = previous ? previous.id : createRecordingId();
+        const segment = previous ? previous.nextSegment : 0;
+        const baseDurationMs = previous?.durationMs ?? 0;
         const session = createSession({
             id,
             acquired,
@@ -439,6 +657,9 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
             mimeType,
             startedAt: Date.now(),
             settings: this.settings,
+            previous,
+            segment,
+            baseDurationMs,
         });
 
         this.attachRecorderListeners(session);
@@ -517,6 +738,8 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         }
 
         const position = session.nextPosition;
+        // Taken now, so the stored duration covers this slice even if the write runs later.
+        const durationMs = totalDurationMs(session);
 
         session.nextPosition += 1;
         session.slices.push(blob);
@@ -524,7 +747,8 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         session.monitors.forEach((monitor) => {
             monitor.noteData();
         });
-        this.enqueueWrite(session, store => writeSlice(store, session.id, position, blob));
+        this.enqueueWrite(session, store => writeSlice(store, session, position, blob));
+        this.enqueueWrite(session, store => saveSnapshot(store, session, durationMs));
         this.publishProgress(session);
     }
 
@@ -575,6 +799,13 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
 
         session.hasProblem = true;
         this.emit('problem', { code, error });
+    }
+
+    // Only the first problem is emitted. A later one is dropped.
+    private emitFirstProblem(session: RecordingSession, code: RecorderProblemCode): void {
+        if (!session.hasProblem) {
+            this.emitProblem(session, code);
+        }
     }
 
     private enqueueWrite(session: RecordingSession, write: StoreWrite): void {
@@ -671,9 +902,9 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
         releaseStream(session.acquired);
 
         if (!session.isDiscarded) {
-            const updatedAt = Date.now();
+            const durationMs = totalDurationMs(session);
 
-            this.enqueueWrite(session, store => store.saveMeta({ ...session.meta, updatedAt }));
+            this.enqueueWrite(session, store => saveSnapshot(store, session, durationMs));
         }
 
         await session.writes;
@@ -681,35 +912,85 @@ class DurableRecorder extends TypedEventEmitter<DurableRecorderEvents> {
 
     private async concludeRecording(session: RecordingSession): Promise<FinishedRecording | null> {
         if (session.isDiscarded) {
-            await removeStored(session.store, session.id);
+            await removeTake(session.store, session);
             this.goIdle();
 
             return null;
         }
 
-        const blob = new Blob(session.slices, { type: session.mimeType });
+        const take = new Blob(session.slices, { type: session.mimeType });
 
-        if (blob.size < this.settings.minRecordingBytes) {
-            this.emitEmptyProblem(session);
-            await removeStored(session.store, session.id);
+        if (take.size < this.settings.minRecordingBytes) {
+            this.emitFirstProblem(session, 'EMPTY');
+            await removeTake(session.store, session);
+
+            return this.resolvePrevious(session);
+        }
+
+        return this.resolveTake(session, take);
+    }
+
+    // A new take that is too short leaves the stored recording as it was.
+    private async resolvePrevious(session: RecordingSession): Promise<FinishedRecording | null> {
+        const previous = session.previous;
+
+        if (!previous) {
             this.goIdle();
 
             return null;
         }
 
+        const joined = await joinSegments(this.settings.mergeSegments, previous.segments, session.mimeType);
+
+        if (!joined) {
+            this.goIdle();
+
+            return null;
+        }
+
+        return this.completeRecording(session, joined, previous.segments.length, session.baseDurationMs);
+    }
+
+    private async resolveTake(session: RecordingSession, take: Blob): Promise<FinishedRecording> {
+        const previous = session.previous;
+
+        if (!previous) {
+            const durationMs = totalDurationMs(session);
+
+            return this.completeRecording(session, take, 1, durationMs);
+        }
+
+        const allSegments = [...previous.segments, take];
+        const joined = await joinSegments(this.settings.mergeSegments, allSegments, session.mimeType);
+
+        if (joined) {
+            const durationMs = totalDurationMs(session);
+
+            return this.completeRecording(session, joined, allSegments.length, durationMs);
+        }
+
+        // The store still has every segment, so the app can load them later.
+        this.emitFirstProblem(session, 'NOT_JOINED');
+
+        const takeOnlyMs = takeDurationMs(session);
+
+        return this.completeRecording(session, take, 1, takeOnlyMs);
+    }
+
+    // Shared end of every finished result: finalize, go idle, then announce it.
+    private async completeRecording(
+        session: RecordingSession,
+        blob: Blob,
+        segments: number,
+        durationMs: number,
+    ): Promise<FinishedRecording> {
         const finalBlob = await this.finalizeBlob(blob, session.mimeType);
-        const finished = buildFinished(session, finalBlob);
+        const finished = buildFinished(session, finalBlob, segments, durationMs);
 
         this.goIdle();
         this.emit('finish', finished);
 
         return finished;
-    }
-
-    private emitEmptyProblem(session: RecordingSession): void {
-        if (!session.hasProblem) {
-            this.emitProblem(session, 'EMPTY');
-        }
     }
 
     // A failed finalize keeps the original blob.

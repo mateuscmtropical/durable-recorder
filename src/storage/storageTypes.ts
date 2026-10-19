@@ -8,6 +8,7 @@ interface RecordingMeta {
     updatedAt: number; // ms since epoch
     metadata: Record<string, unknown>; // app data, must be structured-cloneable
     nextSegment: number; // index the next continued take will use
+    durationMs?: number; // total recorded ms over all segments. Missing in rows saved before this field existed
 }
 
 interface StoredChunk {

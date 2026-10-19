@@ -22,6 +22,16 @@ interface DurableRecorderOptions {
     metadata?: Record<string, unknown>; // default {}
     store?: RecordingStore | null; // default new RecordingStore(). null keeps the slices in memory only
     minRecordingBytes?: number; // default 1024
+    /**
+     * Days a recording may stay unchanged before it is pruned. Default 30.
+     * Infinity means never expire. Ignored when store is set, because that store has its own retention.
+     */
+    retentionDays?: number;
+    /**
+     * Same signature as mergeSegments from the container entry.
+     * continueRecording and the stop of a continued recording need it.
+     */
+    mergeSegments?: (segments: Blob[], mimeType: string) => Promise<Blob | null>;
     monitors?: MonitorFactory[]; // default createDefaultMonitors(source)
     finalize?: (recording: Blob, mimeType: string) => Promise<Blob>; // optional, for example finalizeRecording from the container entry
 }
@@ -39,6 +49,7 @@ interface FinishedRecording {
     durationMs: number;
     sizeBytes: number;
     metadata: Record<string, unknown>;
+    segments: number; // how many segments the blob contains. 1 for a normal recording
 }
 
 interface DurableRecorderEvents {

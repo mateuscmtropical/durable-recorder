@@ -28,7 +28,8 @@ The library reports a problem. The app decides what to do about it.
 - **Capture input.** `acquireStream` gets a microphone, a camera, the screen or a `MediaStream` from your app. `releaseStream` stops the tracks that the library opened.
 - **Choose a format.** `pickMimeType` returns the first format the browser can record, from a fixed list. `extensionForMimeType` returns a file extension for it.
 - **Save while recording.** `RecordingStore.appendChunk` writes each slice to IndexedDB. The data stays on the device until your app deletes it or prunes it.
-- **Expiry.** `RecordingStore.pruneExpired` removes recordings older than `retentionDays`, 30 by default. Nothing calls it for you yet, so call it when your app starts.
+- **Expiry.** `RecordingStore.pruneExpired` removes recordings older than `retentionDays`, 30 by default. `DurableRecorder` calls it the first time it uses its store. Its `retentionDays` option sets the age for the default store. A store you pass in keeps its own `retentionDays`.
+- **Recover and continue.** `DurableRecorder.listRecoverable` lists the recordings kept on the device. `continueRecording(id)` records a new segment onto one of them, and `stop()` joins all segments into one file.
 - **Segments.** A recording can have several segments. Segment 0 is the first take. A continued recording adds the next segment.
 - **Join without re-encoding.** `mergeSegments` copies the encoded packets of every segment into one file. It does not decode or encode the media. A single segment is returned as it is.
 - **Playable WebM.** `finalizeRecording` copies a WebM recording into a new file, which writes its duration. If the copy fails, it returns the input. `readDuration` reads the duration of a recording. `revealMediaDuration` seeks a media element to the end, so it finds the duration of a WebM file, then rewinds it to 0.
