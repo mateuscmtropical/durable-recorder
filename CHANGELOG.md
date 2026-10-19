@@ -17,3 +17,4 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `durable-recorder/container` entry point with `mergeSegments`, `readDuration`, `finalizeRecording` and `revealMediaDuration`. It uses `mediabunny`, an optional peer dependency.
 - `RecordingStore`, which keeps recordings and their slices in IndexedDB, and the `estimateAvailableBytes` and `requestPersistentStorage` storage helpers.
 - Contributing guide, code of conduct, security and support policies, issue forms and a pull request template.
+- `createInterruptionMonitor`, which reports `NO_DATA` when slices stop arriving and `INTERRUPTED` when an input track ends or stays muted.
