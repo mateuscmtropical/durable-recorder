@@ -3,6 +3,7 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
     entry: {
         index: 'src/index.ts',
+        container: 'src/container/index.ts',
     },
     format: ['esm', 'cjs'],
     dts: true,
@@ -10,4 +11,5 @@ export default defineConfig({
     clean: true,
     target: 'es2022',
     platform: 'browser',
+    external: ['mediabunny'],
 });
